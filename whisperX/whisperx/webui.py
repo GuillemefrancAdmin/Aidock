@@ -52,7 +52,7 @@ body { background: var(--paper); }
 .file-list { gap: 0.4rem !important; }
 .file-row { align-items: center; gap: 0.5rem; padding: 0.5rem 0.7rem; border: 1px solid var(--line); border-radius: 8px; background: #fffaf6; }
 .file-row-name { flex: 1; font-size: 0.85rem; color: var(--ink); word-break: break-all; }
-.file-row-button { min-width: 0 !important; }
+.file-row-icon { min-width: 2.1rem !important; max-width: 2.1rem !important; flex: none !important; padding: 0 !important; font-size: 1rem !important; }
 .file-list-empty { padding: 0.6rem 0.2rem; color: var(--muted); font-size: 0.85rem; }
 footer { display: none !important; }
 """
@@ -164,24 +164,16 @@ def _clear_transcription_outputs() -> tuple[str, str, list[str], str, float]:
     return "Preparing", "", [], "", time.monotonic()
 
 
-def _load_file_preview(path: str | None) -> Any:
+def _load_file_preview(path: str | None) -> str:
     if not path:
-        raise gr.Error("Choose a file to preview first.")
+        raise gr.Error("Choose a file to view first.")
     file_path = Path(path)
     if not file_path.is_file():
         raise gr.Error("That file is no longer available.")
     try:
-        content = file_path.read_text(encoding="utf-8")
+        return file_path.read_text(encoding="utf-8")
     except UnicodeDecodeError as error:
-        raise gr.Error("This file isn't text and can't be previewed here.") from error
-    language = "json" if file_path.suffix.lower() == ".json" else None
-    return gr.update(value=content, language=language)
-
-
-def _preview_first_file(file_paths: list[str] | None) -> Any:
-    if not file_paths:
-        return gr.update(value="", language=None)
-    return _load_file_preview(file_paths[0])
+        raise gr.Error("This file isn't text and can't be viewed here.") from error
 
 
 def _update_elapsed_status(started_at: float | None, status: str) -> str:
@@ -499,12 +491,7 @@ def build_demo() -> gr.Blocks:
                     with gr.Column(elem_classes=["download-panel"]):
                         downloads = gr.State([])
                         file_list = gr.Column(elem_classes=["file-list"])
-                        file_preview = gr.Code(
-                            label="File content",
-                            interactive=False,
-                            lines=18,
-                            elem_classes=["log-view"],
-                        )
+                        file_preview_bridge = gr.Textbox(visible=False)
 
                         @gr.render(inputs=downloads)
                         def _render_file_list(file_paths: list[str]) -> None:
@@ -518,20 +505,37 @@ def build_demo() -> gr.Blocks:
                                 name = Path(path).name
                                 with gr.Row(elem_classes=["file-row"]):
                                     gr.Markdown(name, elem_classes=["file-row-name"])
-                                    gr.DownloadButton(
-                                        "Download",
-                                        value=path,
-                                        size="sm",
-                                        scale=0,
-                                        elem_classes=["file-row-button"],
-                                    )
                                     view_button = gr.Button(
-                                        "View", size="sm", scale=0, elem_classes=["file-row-button"]
+                                        "👁", size="sm", scale=0, elem_classes=["file-row-icon"]
                                     )
                                     view_button.click(
                                         _load_file_preview,
                                         inputs=gr.State(path),
-                                        outputs=file_preview,
+                                        outputs=file_preview_bridge,
+                                    ).then(
+                                        fn=None,
+                                        inputs=file_preview_bridge,
+                                        js="""
+                                        (content) => {
+                                            const tab = window.open('', '_blank');
+                                            if (!tab) { return; }
+                                            tab.document.title = 'File preview';
+                                            const pre = tab.document.createElement('pre');
+                                            pre.style.whiteSpace = 'pre-wrap';
+                                            pre.style.wordBreak = 'break-word';
+                                            pre.style.fontFamily = 'monospace';
+                                            pre.style.padding = '1rem';
+                                            pre.textContent = content;
+                                            tab.document.body.appendChild(pre);
+                                        }
+                                        """,
+                                    )
+                                    gr.DownloadButton(
+                                        "⬇",
+                                        value=path,
+                                        size="sm",
+                                        scale=0,
+                                        elem_classes=["file-row-icon"],
                                     )
 
             scroll_to_results = """
@@ -572,7 +576,6 @@ def build_demo() -> gr.Blocks:
             outputs=status,
             show_progress="hidden",
         )
-        downloads.change(_preview_first_file, inputs=downloads, outputs=file_preview)
         status.change(lambda value: value, inputs=status, outputs=results_status, show_progress="hidden")
     return demo
 

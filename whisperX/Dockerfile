@@ -15,9 +15,12 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LD_LIBRARY_PATH=/app/.venv/lib/python3.10/site-packages/nvidia/cudnn/lib
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 python3-pip ffmpeg git ca-certificates \
-    && python3 -m pip install --no-cache-dir uv \
-    && rm -rf /var/lib/apt/lists/*
+    # libpython3.10 provides libpython3.10.so.1.0, required by torchcodec's
+    # bundled FFmpeg-4 extension (matches this image's apt ffmpeg 4.4.2);
+    # without it torchcodec fails to load and pyannote's audio decoding breaks.
+    && apt-get install -y --no-install-recommends python3 python3-pip libpython3.10 ffmpeg git ca-certificates \
+&& python3 -m pip install --no-cache-dir uv \
+&& rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md MANIFEST.in LICENSE ./
