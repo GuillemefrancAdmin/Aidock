@@ -76,6 +76,15 @@ services:
       # APP_BIND_HOST comment for the rationale. Override for a LAN/WAN prod
       # deployment only once REQUIRE_API_KEY=true or a reverse proxy in front
       # of this instance is confirmed to enforce its own auth.
+      #
+      # Always publish on 127.0.0.1 (local access from this machine keeps
+      # working no matter what APP_BIND_HOST is set to) PLUS APP_BIND_HOST
+      # (e.g. this host's Tailscale IP), so both local and tailnet access work
+      # side by side. Docker allows the same container port to be published on
+      # multiple distinct host addresses.
+      - "127.0.0.1:${PROD_DASHBOARD_PORT:-20130}:${DASHBOARD_PORT:-${PORT:-20128}}"
+      - "127.0.0.1:${PROD_API_PORT:-20131}:${API_PORT:-20129}"
+      - "127.0.0.1:${PROD_LIVE_WS_PORT:-20132}:${LIVE_WS_PORT:-20132}"
       - "${APP_BIND_HOST:-127.0.0.1}:${PROD_DASHBOARD_PORT:-20130}:${DASHBOARD_PORT:-${PORT:-20128}}"
       - "${APP_BIND_HOST:-127.0.0.1}:${PROD_API_PORT:-20131}:${API_PORT:-20129}"
       - "${APP_BIND_HOST:-127.0.0.1}:${PROD_LIVE_WS_PORT:-20132}:${LIVE_WS_PORT:-20132}"

@@ -1,0 +1,119 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Server {
+  id          String   @id @default(cuid())
+  name        String
+  url         String
+  gpuAgentUrl String?
+  gpuIndex    Int?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  logs        Log[]
+  chats       Chat[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String
+  role      String   @default("user")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  logs      Log[]
+  chats     Chat[]
+}
+
+model Chat {
+  id         String    @id @default(cuid())
+  title      String
+  model      String
+  serverId   String
+  server     Server    @relation(fields: [serverId], references: [id])
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id])
+  messages   Message[]
+  parameters String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model Message {
+  id               String   @id @default(cuid())
+  chatId           String
+  chat             Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  role             String
+  content          String
+  images           String?
+  model            String?
+  serverId         String?
+  compareGroup     String?
+  promptTokens     Int?
+  completionTokens Int?
+  latencyMs        Int?
+  createdAt        DateTime @default(now())
+}
+
+model Log {
+  id               String   @id @default(cuid())
+  serverId         String
+  server           Server   @relation(fields: [serverId], references: [id])
+  model            String
+  endpoint         String
+  promptTokens     Int?
+  completionTokens Int?
+  latencyMs        Int
+  statusCode       Int
+  userId           String?
+  user             User?    @relation(fields: [userId], references: [id])
+  apiKeyId         String?
+  apiKey           ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  ip               String?
+  createdAt        DateTime @default(now())
+}
+
+model Preset {
+  id           String   @id @default(cuid())
+  name         String
+  temperature  Float?
+  topK         Int?
+  topP         Float?
+  numCtx       Int?
+  numPredict   Int?
+  systemPrompt String?
+  createdAt    DateTime @default(now())
+}
+
+model CatalogModel {
+  id          String    @id
+  name        String
+  description String?
+  family      String?
+  tags        String
+  pullCount   Int?
+  lastUpdated DateTime?
+  cachedAt    DateTime  @default(now())
+}
+
+model ApiKey {
+  id        String    @id @default(cuid())
+  name      String
+  key       String    @unique
+  lastUsed  DateTime?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  logs      Log[]
+}
+
+model Settings {
+  key   String @id
+  value String
+}

@@ -13,14 +13,19 @@ services:
     #  - "--config=/app/config.yaml"
     ##############################################
     ports:
-      - "4000:4000" # Map the container port to the host, change the host port if necessary
+      # Published on loopback always (local access from this machine) PLUS
+      # LITELLM_BIND_HOST (e.g. this host's Tailscale IP), so both local and
+      # tailnet access work side by side without exposing to the whole LAN.
+      # Set LITELLM_BIND_HOST in .env; defaults to loopback-only if unset.
+      - "127.0.0.1:4000:4000"
+      - "${LITELLM_BIND_HOST:-127.0.0.1}:4000:4000"
     environment:
-      DATABASE_URL: "postgresql://llmproxy:dbpassword9090@db:5432/litellm"
+      DATABASE_URL: "postgresql://llmproxy:${POSTGRES_PASSWORD}@db:5432/litellm"
       # Optional: route read-only queries (find_*, count, group_by, query_raw/_first)
       # to a separate reader endpoint, e.g. an Aurora reader. Leave unset for
       # single-DB deployments. With IAM_TOKEN_DB_AUTH enabled, the reader URL
       # is auto-refreshed alongside the writer.
-      # DATABASE_URL_READ_REPLICA: "postgresql://llmproxy:dbpassword9090@db-reader:5432/litellm"
+      # DATABASE_URL_READ_REPLICA: "postgresql://llmproxy:${POSTGRES_PASSWORD}@db-reader:5432/litellm"
       STORE_MODEL_IN_DB: "True" # allows adding models to proxy via UI
     env_file:
       - .env # Load local .env file
@@ -42,9 +47,11 @@ services:
     environment:
       POSTGRES_DB: litellm
       POSTGRES_USER: llmproxy
-      POSTGRES_PASSWORD: dbpassword9090
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
+      # Loopback-only: only the litellm service (same compose network) needs
+      # to reach Postgres. No reason to publish it beyond this host.
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data # Persists Postgres data across container restarts
     healthcheck:
@@ -59,7 +66,8 @@ services:
       - prometheus_data:/prometheus
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
-      - "9090:9090"
+      # Loopback-only: internal metrics scraping, not needed over the tailnet.
+      - "127.0.0.1:9090:9090"
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
