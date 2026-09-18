@@ -12,6 +12,7 @@ import {
   Gauge,
   Layers,
   Maximize2,
+  TrendingUp,
 } from "lucide-react";
 import { gradeColor, gradeBg, type Grade } from "@/lib/model-scoring";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -28,6 +29,7 @@ interface RunningModel {
   size: number;
   size_vram: number;
   expires_at: string;
+  tokensPerSecond: number | null;
 }
 
 interface GpuInfo {
@@ -453,11 +455,18 @@ export default function GpuPage() {
                 gpu.memoryUsed
               );
               const otherVramBytes = Math.max(0, gpu.memoryUsed - modelsVramBytes);
+              const isGenerating = server.runningModels.some(
+                (m) => m.tokensPerSecond != null
+              );
+              const tokensPerSecondSum = server.runningModels.reduce(
+                (sum, m) => sum + (m.tokensPerSecond ?? 0),
+                0
+              );
 
               return (
                 <div key={gi} className="space-y-4">
                   {/* Stat cards row */}
-                  <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
                     <StatCard
                       icon={Cpu}
                       label={t("gpuName")}
@@ -494,6 +503,16 @@ export default function GpuPage() {
                       icon={MemoryStick}
                       label={t("vramUsed")}
                       value={`${formatBytes(gpu.memoryUsed)} / ${formatBytes(gpu.memoryTotal)}`}
+                    />
+                    <StatCard
+                      icon={TrendingUp}
+                      label={t("generationSpeed")}
+                      value={
+                        isGenerating
+                          ? `${Math.round(tokensPerSecondSum * 10) / 10} ${t("tokensPerSecond")}`
+                          : t("idle")
+                      }
+                      valueColor={isGenerating ? "hsl(142 71% 45%)" : undefined}
                     />
                   </div>
 
@@ -653,9 +672,18 @@ export default function GpuPage() {
                               <span className="truncate text-sm font-medium">
                                 {model.name}
                               </span>
-                              <Badge variant="muted" className="ml-2 shrink-0">
-                                {formatBytes(model.size_vram)} VRAM
-                              </Badge>
+                              <div className="ml-2 flex shrink-0 items-center gap-1.5">
+                                {model.tokensPerSecond != null ? (
+                                  <Badge variant="success">
+                                    {model.tokensPerSecond} {t("tokensPerSecond")}
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="muted">{t("idle")}</Badge>
+                                )}
+                                <Badge variant="muted">
+                                  {formatBytes(model.size_vram)} VRAM
+                                </Badge>
+                              </div>
                             </div>
                             <ProgressBar
                               value={vramPct}

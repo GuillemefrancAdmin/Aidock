@@ -5,6 +5,7 @@ import { getRateLimitKey } from "@/lib/with-rate-limit";
 import { logger } from "@/lib/logger";
 import { buildOllamaUrl } from "@/lib/ollama";
 import { logAsync } from "@/lib/log-async";
+import { recordToken, recordCompletion } from "@/lib/token-metrics";
 
 interface ModelTarget {
   serverId: string;
@@ -183,6 +184,7 @@ export async function POST(
               const json = JSON.parse(line);
               if (json.message?.content) {
                 fullContent += json.message.content;
+                recordToken(server.id, target.model);
                 controller.enqueue(
                   encoder.encode(
                     `data: ${JSON.stringify({ side, token: json.message.content })}\n\n`
@@ -192,6 +194,13 @@ export async function POST(
               if (json.done) {
                 promptTokens = json.prompt_eval_count || 0;
                 completionTokens = json.eval_count || 0;
+                if (json.eval_count > 0 && json.eval_duration > 0) {
+                  recordCompletion(
+                    server.id,
+                    target.model,
+                    (json.eval_count / json.eval_duration) * 1e9
+                  );
+                }
               }
             } catch {
               // skip

@@ -4,11 +4,14 @@ import { logger } from "@/lib/logger";
 import { logAsync } from "@/lib/log-async";
 import { withRateLimit } from "@/lib/with-rate-limit";
 import { validateApiKey } from "@/lib/validate-api-key";
+import { consumeOllamaStream } from "@/lib/token-metrics";
 import {
   buildOllamaUrl,
   formatOllamaConnectionError,
   redactOllamaUrl,
 } from "@/lib/ollama";
+
+const GENERATION_ENDPOINTS = ["/api/generate", "/api/chat", "/v1/chat/completions", "/v1/completions"];
 
 async function proxyToOllama(req: NextRequest) {
   let apiKeyId: string | undefined;
@@ -110,7 +113,18 @@ async function proxyToOllama(req: NextRequest) {
       ip: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || null,
     });
 
-    const responseBody = ollamaRes.body;
+    let responseBody = ollamaRes.body;
+    if (
+      responseBody &&
+      statusCode < 400 &&
+      model !== "unknown" &&
+      GENERATION_ENDPOINTS.some((endpoint) => path.includes(endpoint))
+    ) {
+      const [clientStream, metricsStream] = responseBody.tee();
+      responseBody = clientStream;
+      consumeOllamaStream(server.id, model, metricsStream).catch(() => {});
+    }
+
     return new Response(responseBody, {
       status: statusCode,
       headers: {

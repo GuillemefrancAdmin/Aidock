@@ -5,12 +5,14 @@ import { logger } from "@/lib/logger";
 import { buildOllamaUrl, redactOllamaUrl } from "@/lib/ollama";
 import { lookupGpuSpecs } from "@/lib/gpu-specs";
 import { scoreModel, type ModelScore } from "@/lib/model-scoring";
+import { getTokensPerSecond } from "@/lib/token-metrics";
 
 interface RunningModel {
   name: string;
   size: number;
   size_vram: number;
   expires_at: string;
+  tokensPerSecond: number | null;
 }
 
 interface GpuInfo {
@@ -81,12 +83,14 @@ function generateDummyRunningModels(): RunningModel[] {
       size: 4.7 * 1024 * 1024 * 1024,
       size_vram: 4.7 * 1024 * 1024 * 1024,
       expires_at: new Date(now.getTime() + 5 * 60 * 1000).toISOString(),
+      tokensPerSecond: Math.round((25 + Math.random() * 40) * 10) / 10,
     },
     {
       name: "codellama:13b",
       size: 7.4 * 1024 * 1024 * 1024,
       size_vram: 7.4 * 1024 * 1024 * 1024,
       expires_at: new Date(now.getTime() + 3 * 60 * 1000).toISOString(),
+      tokensPerSecond: null,
     },
   ];
 }
@@ -147,7 +151,11 @@ export async function GET() {
         });
         if (psRes.ok) {
           const data = await psRes.json();
-          result.runningModels = data.models || [];
+          const models: Array<Omit<RunningModel, "tokensPerSecond">> = data.models || [];
+          result.runningModels = models.map((m) => ({
+            ...m,
+            tokensPerSecond: getTokensPerSecond(server.id, m.name),
+          }));
         }
       } catch {
         result.error = "Could not connect to Ollama server";

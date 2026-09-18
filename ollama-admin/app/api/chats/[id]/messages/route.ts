@@ -8,6 +8,7 @@ import {
   formatOllamaConnectionError,
 } from "@/lib/ollama";
 import { logAsync } from "@/lib/log-async";
+import { recordToken, recordCompletion } from "@/lib/token-metrics";
 
 function buildOllamaRequest(
   chat: {
@@ -80,10 +81,18 @@ function createSSEStream(
             const json = JSON.parse(line);
             if (json.message?.content) {
               fullContent += json.message.content;
+              recordToken(chat.server.id, chat.model);
             }
             if (json.done) {
               promptTokens = json.prompt_eval_count || 0;
               completionTokens = json.eval_count || 0;
+              if (json.eval_count > 0 && json.eval_duration > 0) {
+                recordCompletion(
+                  chat.server.id,
+                  chat.model,
+                  (json.eval_count / json.eval_duration) * 1e9
+                );
+              }
             }
             controller.enqueue(
               new TextEncoder().encode(`data: ${line}\n\n`)
